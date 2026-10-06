@@ -1,0 +1,4 @@
+# Only for export_models.py 
+ultralytics>=8.4      # YOLO26 support
+onnx
+onnxslim             

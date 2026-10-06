@@ -1,0 +1,26 @@
+# Primary detector (M1): YOLO26m, NMS-free [N,300,6] output decoded by parser/libnvdsparse_yolo26.so.
+# Relative paths are resolved from THIS file's folder.
+[property]
+gpu-id=0
+net-scale-factor=0.0039215686274509803
+model-color-format=0
+onnx-file=../models/yolo26m_384x640.onnx
+# batch-size MUST equal the largest camera group (run.py warns otherwise); the engine name carries it (_b2_)
+model-engine-file=../models/yolo26m_384x640.onnx_b2_gpu0_fp16.engine
+labelfile-path=../models/coco_labels.txt
+batch-size=2
+network-mode=2
+num-detected-classes=80
+interval=0
+gie-unique-id=1
+process-mode=1
+network-type=0
+# model output is already NMS-free -> no clustering
+cluster-mode=4
+maintain-aspect-ratio=1
+symmetric-padding=1
+parse-bbox-func-name=NvDsInferParseYolo26
+custom-lib-path=../parser/libnvdsparse_yolo26.so
+
+[class-attrs-all]
+pre-cluster-threshold=0.30

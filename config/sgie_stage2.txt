@@ -1,0 +1,22 @@
+# Secondary classifier (M2): runs on crops of persons / vehicles found by M1.
+# Replace the model + labels with your own (e.g. PPE classifier) and adjust operate-on-class-ids.
+[property]
+gpu-id=0
+net-scale-factor=0.0039215686274509803
+model-color-format=0
+onnx-file=../models/stage2_cls.onnx
+# nvinfer builds this engine on the first run; _b16_ = batch-size below
+model-engine-file=../models/stage2_cls.onnx_b16_gpu0_fp16.engine
+labelfile-path=../models/stage2_labels.txt
+batch-size=16
+network-mode=2
+gie-unique-id=2
+process-mode=2
+network-type=1
+operate-on-gie-id=1
+# COCO: 0 person, 1 bicycle, 2 car, 3 motorcycle, 5 bus, 7 truck
+operate-on-class-ids=0;1;2;3;5;7
+input-object-min-width=16
+input-object-min-height=16
+classifier-threshold=0.5
+maintain-aspect-ratio=0
