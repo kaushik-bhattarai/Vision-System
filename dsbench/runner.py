@@ -22,8 +22,8 @@ def run_once(a):
     gu.require_deepstream()
     cams, groups = a.names, a.group_idx
     a.run_name = time.strftime("%Y%m%d_%H%M%S")
-    print(f"[bench] mux {a.mux_width}x{a.mux_height}   detector {a.det_width}x{a.det_height} batch {a.det_batch}   "
-          f"tracker {a.tracker_width}x{a.tracker_height}   min crop {a.min_crop_w}x{a.min_crop_h}px")
+    print(f"[bench] mux {a.mux_width}x{a.mux_height}   detector {a.det_width}x{a.det_height} batch {a.det_batch} "
+        f"{a.det_precision}   tracker {a.tracker_width}x{a.tracker_height}   min crop {a.min_crop_w}x{a.min_crop_h}px")
     for name, uri in zip(cams, a.uris):
         print(f"  {name:<10} {mask_uri(uri)}")
     print("[bench] round-robin order: " + "  ->  ".join(

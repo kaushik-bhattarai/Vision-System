@@ -5,6 +5,8 @@ __pycache__/
 
 config/cameras.json
 config/cameras_40.json
+config/_pgie_generated.txt
+config/_pgie_eval_*.txt
 
 bench_out/
 parser/*.so

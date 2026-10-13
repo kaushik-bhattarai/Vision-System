@@ -1,4 +1,5 @@
 # Only for export_models.py 
-ultralytics>=8.4    
+ultralytics>=8.4
 onnx
-onnxslim             
+onnxslim
+PyYAML             

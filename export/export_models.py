@@ -1,25 +1,29 @@
 #!/usr/bin/env python3
 """Export the ONNX files that DeepStream turns into TensorRT engines.
-  M1  best.pt (fine-tuned detector) -> models/<name>_<H>x<W>.onnx   (dynamic batch) + models/labels.txt
-  M2  stage-2 model                 -> models/stage2_cls.onnx        (default: yolo26s-cls.pt stand-in, 224x224)
+  M1  best.pt (fine-tuned detector) -> models/<detector.name>_<H>x<W>.onnx (dynamic batch) + models/labels.txt
+  M2  stage-2 model                 -> models/stage2_cls.onnx             (default: yolo26s-cls.pt stand-in, 224x224)
 
-H and W must be multiples of 32. The H x W here must equal detector.height / detector.width in config.yaml.
+Name and H x W come from detector.* in config/config.yaml (override the size with --m1-imgsz H W, but then the
+config must say the same). H and W must be multiples of 32.
 Run from the project root. Bare weight names (yolo26m.pt ...) are looked up in the project root first.
 
-  python export/export_models.py --m1 training/training_results/yolo26m_416/weights/best.pt --m1-imgsz 416 416
-  python export/export_models.py --m1 best.pt --m1-imgsz 416 416 --m2 my_cls.pt
-  python export/export_models.py --m1 best.pt --m1-imgsz 416 416 --skip-m2
+  python export/export_models.py --m1 training/training_results/yolo26m_416/weights/best.pt
+  python export/export_models.py --m1 best.pt --m2 my_cls.pt
+  python export/export_models.py --m1 best.pt --skip-m2
 """
 import argparse
 import os
 import shutil
 from pathlib import Path
 
+import yaml
+
 ROOT = Path(__file__).resolve().parent.parent
+_det = yaml.safe_load((ROOT / "config" / "config.yaml").read_text())["detector"]
 
 p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
 p.add_argument("--m1", default="yolo26m.pt")
-p.add_argument("--m1-imgsz", type=int, nargs=2, default=[384, 640], metavar=("H", "W"))
+p.add_argument("--m1-imgsz", type=int, nargs=2, default=[_det["height"], _det["width"]], metavar=("H", "W"))
 p.add_argument("--m2", default="yolo26s-cls.pt")
 p.add_argument("--m2-imgsz", type=int, default=224)
 p.add_argument("--static-batch", type=int, default=0, help="fixed batch instead of dynamic (if dynamic gives trouble)")
@@ -69,10 +73,14 @@ def export(weights, imgsz, dst_name=None):
     return model, dst_name
 
 
-m1, m1_name = export(a.m1, a.m1_imgsz)
+h1, w1 = a.m1_imgsz
+if (h1, w1) != (_det["height"], _det["width"]):
+    print(f"  [warn] --m1-imgsz {h1}x{w1} differs from config.yaml detector {_det['height']}x{_det['width']}; "
+          f"update the config or run.py will look for a different file")
+m1, m1_name = export(a.m1, a.m1_imgsz, f"{_det['name']}_{h1}x{w1}.onnx")
 with open(os.path.join(a.out, "labels.txt"), "w") as f:
     f.write("\n".join(m1.names[i] for i in range(len(m1.names))) + "\n")
-print(f"  labels: {len(m1.names)} classes -> {a.out}/labels.txt  (pgie num-detected-classes must be {len(m1.names)})")
+print(f"  labels: {len(m1.names)} classes -> {a.out}/labels.txt  (num-detected-classes is derived from it)")
 
 if not a.skip_m2:
     m2, _ = export(a.m2, a.m2_imgsz, "stage2_cls.onnx")
@@ -80,5 +88,5 @@ if not a.skip_m2:
         f.write(";".join(str(m2.names[i]) for i in range(len(m2.names))) + "\n")
     print(f"  labels: {len(m2.names)} classes -> {a.out}/stage2_labels.txt")
 
-print(f"\nM1 config must point at:\n  onnx-file=../models/{m1_name}\n"
-      f"  model-engine-file=../models/{m1_name}_b<batch>_gpu0_fp16.engine")
+if _det["precision"] == "int8":
+    print(f"\nNext (precision is int8): python export/calibrate.py   (needed once per size; --force to redo)")

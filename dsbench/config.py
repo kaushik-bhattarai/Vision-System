@@ -65,25 +65,11 @@ def _resolve_groups(spec, names):
 
 
 def _check_models(a):
-    """Warn about the mismatches that make TensorRT rebuild the engine (or silently run something else)."""
+    """Detector names / batch / precision are derived from config.yaml (dsbench/models.py), so only what is
+    NOT derived is checked here."""
     biggest = max(len(g) for g in a.group_idx)
-    try:
-        pg = read_nvinfer(a.pgie)
-    except OSError as e:
-        _fail(f"cannot read detector config: {e}")
-    if "batch-size" in pg and int(pg["batch-size"]) != a.det_batch:
-        print(f"  [warn] {a.pgie}: batch-size={pg['batch-size']} but config.yaml detector.batch_size={a.det_batch}")
-    if a.det_batch != biggest:
-        print(f"  [warn] detector.batch_size={a.det_batch} but the largest camera group has {biggest} cameras")
-    for key in ("onnx-file", "model-engine-file"):
-        name = Path(pg.get(key, "")).name
-        m = re.search(r"(\d+)x(\d+)", name)
-        if m and (int(m.group(1)), int(m.group(2))) != (a.det_height, a.det_width):
-            print(f"  [warn] {key} '{name}' says {m.group(1)}x{m.group(2)} (HxW) but config.yaml has "
-                  f"{a.det_height}x{a.det_width}")
-    eng = Path(pg.get("model-engine-file", "")).name
-    if eng and f"_b{a.det_batch}_" not in eng:
-        print(f"  [warn] engine file '{eng}' does not contain _b{a.det_batch}_ - the engine will be rebuilt on every start")
+    if a.det_batch < biggest:
+        print(f"  [warn] detector.batch_size={a.det_batch} is smaller than the largest camera group ({biggest})")
     try:
         sg = read_nvinfer(a.sgie)
     except OSError as e:
@@ -94,7 +80,7 @@ def _check_models(a):
         print(f"  [warn] tracker size {a.tracker_width}x{a.tracker_height} is not a multiple of 32")
 
 
-def load_config(path=CONFIG_PATH):
+def load_config(path=CONFIG_PATH, make_pgie=True):
     path = Path(path)
     if not path.exists():
         _fail(f"{path} not found")
@@ -106,8 +92,9 @@ def load_config(path=CONFIG_PATH):
     a.latency_ms, a.extra_surfaces = g("stream.rtsp_latency_ms"), g("stream.extra_surfaces")
     a.mux_width, a.mux_height = g("mux.width"), g("mux.height")
     a.mux_batch_size, a.push_timeout_us = g("mux.batch_size"), g("mux.push_timeout_us")
-    a.pgie, a.det_width, a.det_height, a.det_batch = (_path(g("detector.config")), g("detector.width"),
-                                                      g("detector.height"), g("detector.batch_size"))
+    a.pgie_template = _path(g("detector.config"))
+    a.det_name, a.det_precision = g("detector.name"), g("detector.precision")
+    a.det_width, a.det_height, a.det_batch = g("detector.width"), g("detector.height"), g("detector.batch_size")
     a.tracker_lib, a.tracker_config = g("tracker.lib"), _path(g("tracker.config"))
     a.tracker_width, a.tracker_height = g("tracker.width"), g("tracker.height")
     a.sgie = _path(g("classifier.config"))
@@ -130,5 +117,13 @@ def load_config(path=CONFIG_PATH):
     if len(set(a.names)) != len(a.names):
         _fail("cameras file: camera names must be unique")
     a.group_idx = _resolve_groups(cj.get("groups"), a.names)
+
+    a.det_batch = a.det_batch or max(len(x) for x in a.group_idx)  # 0 = auto
+    if make_pgie:
+        from .models import write_pgie  # imported here: models.py imports this module
+
+        a.pgie = str(write_pgie(a))  # the generated nvinfer config the pipeline loads
+    else:
+        a.pgie = None  # caller generates its own (training/accuracy.py)
     _check_models(a)
     return a

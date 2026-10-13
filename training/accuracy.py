@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
-"""Accuracy of the detector (M1) per TensorRT precision.Compares fp32 / fp16 / int8 on the held-out validation split made by train.py.
+"""Accuracy of the detector (M1) per TensorRT precision. Compares fp32 / fp16 / int8 on the held-out validation split made by train.py.
 
 Run in the APP venv (pyds available).  Needs: pip install opencv-python-headless
+Model name, size and batch come from detector.* in config/config.yaml; the per-precision nvinfer config is generated
+by dsbench/models.py (write_pgie), so the engines are the same files run.py uses.
 Detections are cached in bench_out/accuracy/dets_<precision>.json.
 The first run of each precision builds a TensorRT engine.
-INT8 needs the calibration cache from the pgie config.
+INT8 needs the calibration cache (python export/calibrate.py).
 """
 import argparse
 import json
 import os
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -38,11 +39,6 @@ def _deployed_conf():
 OP_CONF = _deployed_conf()
 
 
-def load_cfg():
-    import yaml
-    return yaml.safe_load((ROOT / "config" / "config.yaml").read_text())
-
-
 def list_images():
     imgs = sorted(p for p in IMG_DIR.glob("*") if p.suffix.lower() == ".jpg")
     if not imgs:
@@ -51,29 +47,6 @@ def list_images():
 
 
 # DeepStream detection run (one precision)
-def make_eval_pgie(prec, cfg):
-    from dsbench.config import read_nvinfer
-    base = ROOT / cfg["detector"]["config"]
-    kv = read_nvinfer(base)
-    batch = cfg["detector"]["batch_size"]
-    onnx_name = Path(kv["onnx-file"]).name
-    engine = f"../models/{onnx_name}_b{batch}_gpu0_{prec}.engine"
-    override = {"network-mode": NETWORK_MODE[prec], "model-engine-file": engine}
-    lines, out = base.read_text().splitlines(), []
-    for ln in lines:
-        key = ln.split("=", 1)[0].strip()
-        if not ln.strip().startswith("#") and key in override:
-            continue  # dropped, re-added below
-        if not ln.strip().startswith("#") and key == "pre-cluster-threshold":
-            ln = "pre-cluster-threshold=0.001"
-        out.append(ln)
-        if ln.strip() == "[property]":
-            out += [f"{k}={v}" for k, v in override.items()]
-    dst = base.parent / f"_pgie_eval_{prec}.txt"  # same folder: relative paths keep working
-    dst.write_text("\n".join(out) + "\n")
-    return dst
-
-
 def run_detector(prec):
     import cv2
     os.environ["USE_NEW_NVSTREAMMUX"] = "no"  # legacy muxer: needs width/height
@@ -81,10 +54,11 @@ def run_detector(prec):
     gi.require_version("Gst", "1.0")
     from gi.repository import GLib, Gst
     import pyds
+    from dsbench.config import load_config
     from dsbench.gstutil import iter_list
+    from dsbench.models import write_pgie
 
-    cfg = load_cfg()
-    imgs = list_images()
+    a = load_config(make_pgie=False)  # accuracy.py builds its own per-precision pgie below    imgs = list_images()
     FRAMES.mkdir(parents=True, exist_ok=True)
     for f in FRAMES.glob("*.jpg"):
         f.unlink()
@@ -97,7 +71,8 @@ def run_detector(prec):
     if len(set(sizes)) > 1:
         print(f"  [warn] images have different sizes; muxer uses {mw}x{mh} (first image), boxes are rescaled")
 
-    pgie_cfg = make_eval_pgie(prec, cfg)
+    # detector config for THIS precision; threshold lowered to 0.001 so the full PR curve can be computed
+    pgie_cfg = write_pgie(a, precision=prec, dest=ROOT / "config" / f"_pgie_eval_{prec}.txt", conf=0.001)
     Gst.init(None)
     desc = (f"multifilesrc location={FRAMES}/%06d.jpg index=0 caps=image/jpeg,framerate=30/1 ! jpegdec ! "
             f"nvvideoconvert ! video/x-raw(memory:NVMM),format=NV12 ! mux.sink_0 "
@@ -144,7 +119,7 @@ def run_detector(prec):
     pipe.set_state(Gst.State.PLAYING)
     loop.run()
     pipe.set_state(Gst.State.NULL)
-    pgie_cfg.unlink(missing_ok=True)
+    Path(pgie_cfg).unlink(missing_ok=True)
 
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / f"dets_{prec}.json").write_text(json.dumps(
