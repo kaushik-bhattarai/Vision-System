@@ -1,13 +1,11 @@
 // nvinfer custom bbox parser for the NMS-free YOLO26 ONNX export: output [N, 300, 6] = x1 y1 x2 y2 conf class
-// (coordinates in network-input pixels; nvinfer rescales them to the frame). Only the classes the app uses are kept:
-// person, bicycle, car, motorcycle, bus, truck.
+// (coordinates in network-input pixels; nvinfer rescales them to the frame). All classes of the model are kept
+// (fine-tuned model: 0 human, 1 bike, 2 vehicle); num-detected-classes in the pgie config must equal the class count.
 #include <algorithm>
 #include <iostream>
 #include <vector>
 
 #include "nvdsinfer_custom_impl.h"
-
-static bool wanted(int c) { return c == 0 || c == 1 || c == 2 || c == 3 || c == 5 || c == 7; }
 
 extern "C" bool NvDsInferParseYolo26(std::vector<NvDsInferLayerInfo> const &outputLayersInfo,
                                      NvDsInferNetworkInfo const &networkInfo,
@@ -27,7 +25,7 @@ extern "C" bool NvDsInferParseYolo26(std::vector<NvDsInferLayerInfo> const &outp
     for (unsigned i = 0; i < n; ++i, p += 6) {
         const int cls = static_cast<int>(p[5]);
         const float conf = p[4];
-        if (!wanted(cls) || cls >= static_cast<int>(detectionParams.numClassesConfigured)) continue;
+        if (cls < 0 || cls >= static_cast<int>(detectionParams.numClassesConfigured)) continue;
         if (conf < detectionParams.perClassPreclusterThreshold[cls]) continue;
         const float x1 = std::min(std::max(p[0], 0.f), W), y1 = std::min(std::max(p[1], 0.f), H);
         const float x2 = std::min(std::max(p[2], 0.f), W), y2 = std::min(std::max(p[3], 0.f), H);

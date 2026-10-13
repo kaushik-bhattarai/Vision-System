@@ -1,16 +1,22 @@
-# Primary detector (M1): YOLO26m, NMS-free [N,300,6] output decoded by parser/libnvdsparse_yolo26.so.
-# Relative paths are resolved from THIS file's folder.
+# Primary detector (M1): fine-tuned YOLO26m, NMS-free [N,300,6] output decoded by parser/libnvdsparse_yolo26.so.
+# Classes: 0 human, 1 bike, 2 vehicle.  Relative paths are resolved from THIS file's folder.
+# batch-size / input size here must match config.yaml (detector.*); run.py warns on a mismatch.
 [property]
 gpu-id=0
 net-scale-factor=0.0039215686274509803
 model-color-format=0
-onnx-file=../models/yolo26m_384x640.onnx
-# batch-size MUST equal the largest camera group (run.py warns otherwise); the engine name carries it (_b2_)
-model-engine-file=../models/yolo26m_384x640.onnx_b2_gpu0_fp16.engine
-labelfile-path=../models/coco_labels.txt
-batch-size=2
-network-mode=2
-num-detected-classes=80
+#pretrained yolo model
+#onnx-file=../models/yolo26m_384x640.onnx
+
+#finetuned model
+#onnx-file=../models/best_384x640.onnx
+onnx-file=../models/best_416x416.onnx
+
+labelfile-path=../models/labels.txt
+# batch-size MUST equal the largest camera group; the engine name carries it (_b6_)
+#batch-size=2
+batch-size=6
+num-detected-classes=3
 interval=0
 gie-unique-id=1
 process-mode=1
@@ -21,6 +27,26 @@ maintain-aspect-ratio=1
 symmetric-padding=1
 parse-bbox-func-name=NvDsInferParseYolo26
 custom-lib-path=../parser/libnvdsparse_yolo26.so
+
+# ---- INT8 (uses the calibration cache) ----
+network-mode=1
+
+#pretrained model calib.
+#int8-calib-file=../models/yolo26m_calib.cache
+
+#finetuned model calib.
+int8-calib-file=../models/best_calib.cache
+
+#model-engine-file=../models/yolo26m_384x640.onnx_b2_gpu0_int8.engine
+#model-engine-file=../models/yolo26m_384x640.onnx_b6_gpu0_int8.engine
+#model-engine-file=../models/best_384x640.onnx_b6_gpu0_int8.engine
+model-engine-file=../models/best_416x416.onnx_b6_gpu0_int8.engine
+
+
+# ---- FP16 ----
+#network-mode=2
+#model-engine-file=../models/yolo26m_384x640.onnx_b2_gpu0_fp16.engine
+#model-engine-file=../models/best_384x640.onnx_b6_gpu0_fp16.engine
 
 [class-attrs-all]
 pre-cluster-threshold=0.30

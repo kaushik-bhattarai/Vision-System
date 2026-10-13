@@ -1,4 +1,4 @@
-# Build:  CUDA_VER=13.2 make     (CUDA_VER = the version in /usr/local/cuda-<ver>)
+# Build:  CUDA_VER=13.2 make 
 ifeq ($(CUDA_VER),)
 $(error CUDA_VER is not set, e.g. CUDA_VER=13.2 make)
 endif

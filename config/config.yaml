@@ -1,0 +1,49 @@
+cameras_file: config/cameras_40.json # config/cameras.json  
+stream:
+  rtsp_latency_ms: 400              # RTSP jitter-buffer latency
+  extra_surfaces: 4                 # nvurisrcbin num-extra-surfaces
+
+mux:
+  width: 640
+  height: 360
+  batch_size: 0                     # 0 = size of the largest camera group
+  push_timeout_us: 5000             # legacy nvstreammux batched-push-timeout
+
+detector:                           # M1
+  config: config/pgie_yolo26m.txt
+  width: 416                        
+  height: 416
+  batch_size: 6                    
+
+tracker:
+  lib: /opt/nvidia/deepstream/deepstream/lib/libnvds_nvmultiobjecttracker.so
+  config: config/tracker_accuracy.yml
+  width: 640                        # multiples of 32
+  height: 384
+
+classifier:                        
+  config: config/sgie_stage2.txt
+
+pipeline:
+  stage_queue: 2                    # buffers in the queues between stages
+  gpu_id: 0
+
+scheduler:                          # round-robin
+  slot_buffers: 1                   # frames each camera slot keeps (1 = newest only)
+  token_at: m1                      # m1: next group may enter M1 once the previous batch left M1 | final: one group at a time
+  gather_ms: 40                     # max wait for ALL cameras of a group (0 = whoever is ready)
+  turn_timeout_ms: 50               # safety net for an armed gate
+  token_timeout_ms: 3000            # release a lost token after this long
+  max_frame_age_ms: 1000            # older slot frames count as "no frame"
+  offline_after: 3                  # missed turns before a camera is skipped without waiting
+
+display:
+  tile_width: 320                   # size of each camera tile in the single display window
+  tile_height: 180
+  osd_font: 12                      # label font size (drawn at mux resolution, then scaled to the tile)
+
+run:
+  warmup: 50                        # batches per group discarded from the stats
+  stall_s: 30                       # abort if no batch for this long while running
+  startup_s: 1200                   # wait for the first batch (TensorRT engine build)
+  out_dir: bench_out                # each run writes into <out_dir>/<timestamp>/

@@ -1,5 +1,6 @@
-#(DeepStream 9.1 / Ubuntu 24.04 / Python 3.12).
+# DeepStream 9.1 / Ubuntu 24.04 / Python 3.12
 numpy
-psutil                
-nvidia-ml-py       
-PyGObject            
+psutil
+nvidia-ml-py
+PyGObject
+PyYAML               

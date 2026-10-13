@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import sys
-from pathlib import Path
 
 try:
     import gi
@@ -11,13 +10,13 @@ try:
     from gi.repository import GLib, Gst
 
     import pyds
-except Exception:  # lets the pure-python parts (config, metrics, audit) be imported without DeepStream
+except Exception:  # lets the pure-python parts (config, metrics, report) be imported without DeepStream
     gi = pyds = Gst = GLib = None
 
 
 def require_deepstream():
     if Gst is None:
-        sys.exit("GStreamer python bindings / pyds not found. Run inside the DeepStream container (see README).")
+        sys.exit("GStreamer python bindings / pyds not found. Install DeepStream and pyds first (see README).")
 
 
 def set_if(el, name, val) -> bool:
@@ -67,7 +66,7 @@ def link_chain(pipe, elements):
         x.link(y)
 
 
-# ---- sources ----------------------------------------------------------------------
+#sources
 def _on_new_pad(_src, pad, nbin):
     caps = pad.get_current_caps() or pad.query_caps(None)
     if "video" in caps.get_structure(0).get_name() and caps.get_features(0).contains("memory:NVMM"):
@@ -75,17 +74,8 @@ def _on_new_pad(_src, pad, nbin):
             sys.stderr.write("failed to link decoder src pad to source bin ghost pad\n")
 
 
-def uri_of(x):
-    if "://" in x:
-        return x
-    p = Path(x)
-    if p.exists():
-        return p.resolve().as_uri()
-    sys.exit(f"source not found / not a URI: {x}")
-
-
 def create_source_bin(tag, uri, a):
-    """nvurisrcbin (decoder + RTSP reconnect). Named 'source-bin-<tag>' - DecoderTimer parses that name."""
+    """nvurisrcbin (decoder + RTSP reconnect) for an RTSP URL."""
     nbin = Gst.Bin.new(f"source-bin-{tag}")
     use_bin = Gst.ElementFactory.find("nvurisrcbin") is not None
     src = mk("nvurisrcbin" if use_bin else "uridecodebin", f"src-{tag}")
@@ -96,15 +86,13 @@ def create_source_bin(tag, uri, a):
         set_if(src, "select-rtp-protocol", 4)  # 4 = TCP only
         set_if(src, "cudadec-memtype", 0)
         set_if(src, "gpu-id", a.gpu_id)
-        if a.file_loop:
-            set_if(src, "file-loop", 1)
     src.connect("pad-added", _on_new_pad, nbin)
     nbin.add(src)
     nbin.add_pad(Gst.GhostPad.new_no_target("src", Gst.PadDirection.SRC))
     return nbin
 
 
-# ---- metadata ---------------------------------------------------------------------
+#metadata
 def iter_list(l, cast):
     """Walk a pyds GList, tolerating the StopIteration pyds raises at the end."""
     while l is not None:
@@ -126,7 +114,7 @@ def classifier_result(obj):
 
 def parse_batch(buf, with_objs=False):
     """-> (key, frames). key identifies the batch; frames = [{src, num, ntp, objs}].
-    objs (only with_objs): (class_id, object_id, width, height, m2_label|None)."""
+    objs (only with_objs): (width, height) of every object box."""
     bm = pyds.gst_buffer_get_nvds_batch_meta(hash(buf))
     if bm is None:
         return (), []
@@ -136,7 +124,6 @@ def parse_batch(buf, with_objs=False):
         if with_objs:
             for o in iter_list(fm.obj_meta_list, pyds.NvDsObjectMeta.cast):
                 r = o.rect_params
-                res = classifier_result(o)
-                f["objs"].append((o.class_id, o.object_id, r.width, r.height, res[0] if res else None))
+                f["objs"].append((r.width, r.height))
         frames.append(f)
     return tuple(sorted((f["src"], f["num"]) for f in frames)), frames

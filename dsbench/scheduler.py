@@ -1,9 +1,4 @@
 """Round-robin scheduling: a latest-frame slot + gate per camera, and the scheduler that releases one group at a time.
-
-Per camera:  decoder -> leaky queue (size 1, the "slot") -> [gate] -> muxer
-The queue's streaming thread blocks in a src-pad probe while the gate is closed, holding the OLDEST frame; the queue
-keeps the NEWEST behind it. When the gate is armed and a newer frame is already waiting, the held frame is dropped
-and the loop repeats, so the frame that finally passes is the newest one.
 """
 from __future__ import annotations
 
@@ -26,7 +21,7 @@ class Gate:
         self.t_arrive = collections.OrderedDict()  # pts -> ns when the frame reached the slot
         self.t_last = None
         self.arrived = self.forwarded = self.stale = self.missed = self.skipped = self.miss_run = 0
-        self.ages = []  # ms each released frame spent in the slot
+        self.ages = collections.deque(maxlen=50000)  # ms each released frame spent in the slot (cleared when recording starts)
         self.pass_ages = collections.deque(maxlen=64)  # same, consumed in FIFO order at the end of the pipeline
 
     def attach(self):
@@ -72,7 +67,7 @@ class Gate:
             self.cv.notify_all()
         return Gst.PadProbeReturn.OK
 
-    # ---- scheduler side ------------------------------------------------------------
+    #scheduler side
     def has_fresh(self, now_ns, max_age_ms):
         """A recent frame is waiting in the slot (the camera is alive)."""
         t = self.t_last
@@ -111,7 +106,7 @@ class Scheduler(threading.Thread):
         self.a, self.groups, self.gates, self.stop_ev = a, groups, gates, stop_ev
         self.cv = threading.Condition()
         self.pending = set()  # cameras of the current turn whose frame has not left the token stage yet
-        self.turns, self.last_arm = [], {}
+        self.turns = []
         self.token_timeouts = self.skipped_turns = 0
 
     def release(self, stage, srcs):
@@ -127,7 +122,7 @@ class Scheduler(threading.Thread):
             self.cv.notify_all()
 
     def _gather(self, cands):
-        """Wait up to --gather-ms until every candidate holds a fresh frame. Returns the ready ones."""
+        """Wait up to gather_ms until every candidate holds a fresh frame. Returns the ready ones."""
         t_end = time.perf_counter() + self.a.gather_ms / 1000.0
         while True:
             now_ns = time.perf_counter_ns()
@@ -195,10 +190,7 @@ class Scheduler(threading.Thread):
                     self.token_timeouts += 1
                     self.pending.clear()
             t_tok = time.perf_counter_ns()
-            prev = self.last_arm.get(g)
-            self.last_arm[g] = t_arm
             self.turns.append({"turn": turn, "group": g, "cands": len(cands), "armed": len(armed),
                                "passed": len(passed), "wait_frames_ms": (t_gates - t_begin) / 1e6,
-                               "service_ms": (t_tok - t_gates) / 1e6, "turn_ms": (t_tok - t_arm) / 1e6,
-                               "cycle_ms": (t_arm - prev) / 1e6 if prev else NAN})
+                               "service_ms": (t_tok - t_gates) / 1e6, "turn_ms": (t_tok - t_arm) / 1e6})
             turn += 1

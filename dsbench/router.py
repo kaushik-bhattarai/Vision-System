@@ -30,11 +30,10 @@ class Router:
         return per
 
     def stage_in(self, label, key, frames, t):
-        per, is_m1 = self.split(frames), label == "m1"
-        wall = time.time_ns() if is_m1 else None
-        for g, fr in per.items():
-            self.mets[g].stamp(key, f"{label}_in", t, wall_ns=wall, ntps=[f["ntp"] for f in fr] if is_m1 else None)
-        if is_m1:
+        per = self.split(frames)
+        for g in per:
+            self.mets[g].stamp(key, f"{label}_in", t)
+        if label == "m1":
             with self.lock:
                 self.m1_batches += 1
                 self.mixed += len(per) > 1  # a batch must hold the cameras of ONE group only
@@ -53,7 +52,7 @@ class Router:
                 self.inflight_max = max(self.inflight_max, self.after_m1)
             self.sched.release("m1", srcs)
         if not is_last:
-            for g, fr in per.items():
+            for g in per:
                 self.mets[g].stamp(key, f"{label}_out", t)
             return
         with self.lock:
