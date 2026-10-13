@@ -3,4 +3,9 @@ numpy
 psutil
 nvidia-ml-py
 PyGObject
-PyYAML               
+PyYAML
+
+polygraphy
+onnx
+opencv-python-headless
+tensorrt-cu13        # keep the version close to the TensorRT that DeepStream 9.1 uses
