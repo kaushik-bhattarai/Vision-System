@@ -38,6 +38,13 @@ python3 -c "import gi, pyds; print('pyds', pyds.__version__)"
 If the sources are missing under `.../deepstream/sources/`, clone the repository from the link above into that folder.
 If `gi` is missing: `sudo apt install python3-gi python3-gst-1.0 gstreamer1.0-libav gstreamer1.0-plugins-good`.
 
+optionally the pyds wheel is also provided in this repo.
+
+```bash
+pip install ./pyds-*cp312-cp312-linux_x86_64.whl
+python3 -c "import gi, pyds; print('pyds', pyds.__version__)"
+```
+
 ## 2. Export the models
 
 `ultralytics` (PyTorch) must not go into the app venv: it can replace NumPy and break `pyds`. Run the export step in a
