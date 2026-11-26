@@ -36,6 +36,9 @@ def write_pgie(a, precision=None, dest=None, conf=None):
     if not labels.exists():
         _fail("models/labels.txt not found - run: python export/export_models.py --m1 <best.pt>")
     nc = len([ln for ln in labels.read_text().splitlines() if ln.strip()])
+    parser_so = ROOT / "parser" / "libnvdsparse_yolo26.so"
+    if not parser_so.exists():
+        _fail("parser/libnvdsparse_yolo26.so not found - run: cd parser && CUDA_VER=13.2 make")
 
     override = {
         "onnx-file": onnx,
@@ -44,7 +47,7 @@ def write_pgie(a, precision=None, dest=None, conf=None):
         "batch-size": a.det_batch,
         "network-mode": NETWORK_MODE[precision],
         "num-detected-classes": nc,
-        "custom-lib-path": ROOT / "parser" / "libnvdsparse_yolo26.so",
+        "custom-lib-path": parser_so,
     }
     if precision == "int8":
         if not calib.exists():

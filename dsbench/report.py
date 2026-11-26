@@ -148,8 +148,27 @@ def print_summary(A):
     worst = min(sd["cameras"], key=lambda c: c["use_pct"])
     print(f"Slots     : frames used / decoded per camera: mean {np.mean(use):.1f}%, lowest {worst['use_pct']:.1f}% "
           f"({worst['cam']})   (per-camera table in summary.json)")
+
+    an = A.get("analytics") or []
+    if an:
+        print(f"\n{'camera':<12}{'max ppl':>8}{'crowd %':>9}{'crowds':>8}{'max size':>9}{'cluster %':>11}"
+              f"{'dwell mean':>11}{'dwell max':>10}{'loiter':>8}")
+        for r in an:
+            d = r["dwell_s"] or {}
+            print(f"{r['cam']:<12}{r['people_max']:>8}{r['crowd_frames_pct']:>9.1f}{r['crowd_episodes']:>8}"
+                  f"{r['crowd_max_size']:>9}{r['cluster_frames_pct']:>11.1f}{fmt(d.get('mean')):>11}"
+                  f"{fmt(d.get('max')):>10}{r['loiterers']:>8}")
+
+    ro = (A.get("roi") or {}).get("events")
+    if ro:
+        print("\nROI crossings (cameras with a zone):")
+        for cam, c in ro.items():
+            print(f"  {cam:<12}" + "   ".join(f"{k}: in {v['enter']} out {v['exit']}" for k, v in c.items()))
+        if A["roi"]["dir"]:
+            print(f"  {A['roi']['images']} image(s) + events.csv -> {A['roi']['dir']}")
+
     it = sd["integrity"]
-    print(f"Integrity : mixed-group batches {it['batches_mixing_groups']} | same camera twice {it['same_camera_twice_in_batch']} "
+    print(f"\nIntegrity : mixed-group batches {it['batches_mixing_groups']} | same camera twice {it['same_camera_twice_in_batch']} "
           f"| out of order {it['batches_out_of_order']} | frame numbers not increasing {it['frame_numbers_not_increasing']}"
           f"   -> {'OK' if not sum(it.values()) else 'PROBLEM'}")
 

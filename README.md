@@ -143,3 +143,32 @@ Each run writes `bench_out/<timestamp>/`:
 python3 training/accuracy.py                       # fp32, fp16 and int8 on the validation split from train.py
 python3 training/accuracy.py --precisions fp16 int8
 ```
+
+## 7. Regions of interest (crossings with timestamp and image)
+
+Draw a zone on any camera and the benchmark reports every person / bike / vehicle that enters or leaves it.
+Only cameras with a zone are monitored; the others are untouched.
+
+```bash
+python tools/draw_roi.py            # open http://localhost:8765
+```
+
+1. Pick a camera in the drop-down (a `*` marks cameras that already have a zone).
+2. Click the corners of the zone on the snapshot (3 or more), then **Save zone**. **Delete zone** removes it.
+3. Repeat for other cameras, then start `python run.py` as usual.
+
+Zones are stored in `config/rois.json` (normalised 0..1, so independent of resolution). The snapshot is grabbed from
+the camera stream; if that fails use `--image cam01=/path/frame.jpg`.
+
+While running, a monitored camera's tile shows the zone (yellow, red while occupied) and `ROI` in its header.
+A crossing is decided on the bottom-centre of a tracked box and needs `roi.confirm_frames` consecutive observations on
+the new side. A track that first appears inside the zone is not counted as entering.
+Every crossing writes a jpg with the camera name, time and event burned into a banner, plus a row in `events.csv`. People and vehicles (bikes count as vehicles) have separate in / out counters per camera, shown live in the tile header (`ROI: person in 3 out 2   vehicle in 1 out 0`), in the end-of-run summary and in `summary.json`:
+
+```
+bench_out/roi/<run>/events.csv          timestamp, camera, event, category, class, track_id, image
+bench_out/roi/<run>/<camera>/<camera>_<YYYYmmdd_HHMMSS_mmm>.jpg
+```
+
+Options (`roi:` in `config/config.yaml`): `classes`, `events` (both | enter | exit), `confirm_frames`, `lost_s`,
+`jpeg_quality`. Counts per camera are also printed in the end-of-run summary and stored in `summary.json`.

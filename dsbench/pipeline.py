@@ -27,7 +27,7 @@ def _stage_elements(a):
     return [("m1", pgie), ("trk", trk), ("m2", sgie)]
 
 
-def build_pipeline(a, cams, stop_ev):
+def build_pipeline(a, cams, stop_ev, roi=None):
     """Returns (pipeline, gates indexed by camera id, [(label, element)])."""
     gu.require_deepstream()
     Gst.init(None)
@@ -66,7 +66,7 @@ def build_pipeline(a, cams, stop_ev):
             chain.append(gu.make_queue(f"q_{label}", a.stage_queue))
         chain.append(el)
     gu.link_chain(pipe, chain)
-    add_display(pipe, a, cams, chain[-1])
+    add_display(pipe, a, cams, chain[-1], roi)
     return pipe, gates, stages
 
 

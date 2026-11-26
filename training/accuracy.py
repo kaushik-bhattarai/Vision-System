@@ -58,7 +58,8 @@ def run_detector(prec):
     from dsbench.gstutil import iter_list
     from dsbench.models import write_pgie
 
-    a = load_config(make_pgie=False)  # accuracy.py builds its own per-precision pgie below    imgs = list_images()
+    a = load_config(make_pgie=False)  # accuracy.py builds its own per-precision pgie below
+    imgs = list_images()
     FRAMES.mkdir(parents=True, exist_ok=True)
     for f in FRAMES.glob("*.jpg"):
         f.unlink()

@@ -8,12 +8,14 @@ import time
 
 from . import gstutil as gu
 from . import report
+from .analytics import Analytics
 from .config import mask_uri
 from .gstutil import GLib, Gst
 from .hardware import HwSampler
 from .metrics import Metrics
 from .osd import attach_annotator
 from .pipeline import attach_probes, build_pipeline
+from .roi import RoiMonitor
 from .router import Router
 from .scheduler import Scheduler
 
@@ -22,8 +24,8 @@ def run_once(a):
     gu.require_deepstream()
     cams, groups = a.names, a.group_idx
     a.run_name = time.strftime("%Y%m%d_%H%M%S")
-    print(f"[bench] mux {a.mux_width}x{a.mux_height}   detector {a.det_width}x{a.det_height} batch {a.det_batch} "
-        f"{a.det_precision}   tracker {a.tracker_width}x{a.tracker_height}   min crop {a.min_crop_w}x{a.min_crop_h}px")
+    print(f"[bench] mux {a.mux_width}x{a.mux_height}   detector {a.det_width}x{a.det_height} batch {a.det_batch}   "
+          f"tracker {a.tracker_width}x{a.tracker_height}   min crop {a.min_crop_w}x{a.min_crop_h}px")
     for name, uri in zip(cams, a.uris):
         print(f"  {name:<10} {mask_uri(uri)}")
     print("[bench] round-robin order: " + "  ->  ".join(
@@ -31,13 +33,15 @@ def run_once(a):
 
     mets = [Metrics([cams[i] for i in idxs], g, a.warmup, a.min_crop_w, a.min_crop_h) for g, idxs in enumerate(groups)]
     stop_ev = threading.Event()
-    pipe, gates, stages = build_pipeline(a, cams, stop_ev)
+    roi = RoiMonitor(cams, a)
+    pipe, gates, stages = build_pipeline(a, cams, stop_ev, roi)
     for gate in gates:
         gate.attach()
     sched = Scheduler(a, groups, gates, stop_ev)
     router = Router(groups, mets, gates, sched)
     attach_probes(stages, router)
-    attach_annotator(stages[-1][1], cams, a)
+    an = Analytics(cams, a)
+    attach_annotator(stages[-1][1], cams, a, an, roi)
 
     loop, hw = GLib.MainLoop(), HwSampler(a.gpu_id)
     hw.start()
@@ -79,6 +83,7 @@ def run_once(a):
             state["arrived0"] = (time.perf_counter(), sum(g.arrived for g in gates))
             for g in gates:
                 g.ages.clear()
+            an.reset()  # people analytics: warm-up excluded from the stats
             print("[bench] warm-up done, recording - stop with Ctrl+C")
         return True
 
@@ -98,6 +103,7 @@ def run_once(a):
         t_end, arrived1 = time.perf_counter(), sum(g.arrived for g in gates)
         hw.stop_ev.set()
         pipe.set_state(Gst.State.NULL)
+        roi.close()
 
     ok = [m for m in mets if len(m.recs) >= 5]
     if not ok:
@@ -112,6 +118,8 @@ def run_once(a):
     A = report.aggregate(Ss, ok, hw.summary(since=state["rec_t0"] or 0.0), decoded_fps)
     A["scheduler"] = report.sched_summary(a, sched, router, gates, cams, a.warmup * len(groups))
     A["stop_reason"] = state["stop_reason"]
+    A["analytics"] = an.summary()
+    A["roi"] = {"events": roi.summary(), "images": roi.saved, "dir": str(roi.out) if roi.zones else None}
     report.print_summary(A)
     report.write_outputs(a, ok, A)
     return A

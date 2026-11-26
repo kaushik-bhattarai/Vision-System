@@ -33,3 +33,6 @@ simulation/*.key
 scratch/
 
 train.py
+
+detections.jsonl
+rois.json

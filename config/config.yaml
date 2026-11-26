@@ -14,7 +14,7 @@ detector:
   width: 416
   height: 416
   batch_size: 6                     # 0 = auto (largest camera group)
-  precision: fp16                   # int8 | fp16 | fp32
+  precision: int8                  # int8 | fp16 | fp32
   config: config/pgie_yolo26m.txt
 
 tracker:
@@ -49,3 +49,19 @@ run:
   stall_s: 30                       # abort if no batch for this long while running
   startup_s: 1200                   # wait for the first batch (TensorRT engine build)
   out_dir: bench_out                # each run writes into <out_dir>/<timestamp>/
+
+analytics:
+  dwell_lost_s: 5                   # a track unseen this long ends (must exceed the group revisit interval)
+  dwell_alert_s: 30                 # dwell >= this counts as a loiterer in the report
+  crowd_min_people: 5               # this many people near each other = crowd
+  crowd_distance: 1.5               # "near" = centre distance < this x average person height
+  cluster_min_people: 20            # this many people in one camera = cluster
+
+roi:                                # regions of interest: crossing detection on the cameras that have a zone
+  file: config/rois.json            # zones drawn with tools/draw_roi.py (cameras without a zone are not monitored)
+  out_dir: bench_out/roi            # <out_dir>/<run>/<camera>/*.jpg + events.csv
+  classes: [0, 1, 2]                # 0 human, 1 bike, 2 vehicle
+  events: both                      # both | enter | exit
+  confirm_frames: 2                 # observations on the new side before a crossing counts (filters jitter)
+  lost_s: 5                         # forget a track unseen for this long
+  jpeg_quality: 90

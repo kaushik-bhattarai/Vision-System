@@ -6,6 +6,6 @@ nvidia-ml-py==13.615.71
 opencv-python-headless==5.0.0.93
 psutil==7.2.2
 pycairo==1.29.2
-pyds @ file:///opt/nvidia/deepstream/deepstream-9.1/sources/deepstream_python_apps/bindings/dist/pyds-1.2.3-cp312-cp312-linux_x86_64.whl#sha256=cab5519ad9c5875cc4ce1c33ace055a13e60279061bd895c59b9828321107ac6
+#pyds @ file:///opt/nvidia/deepstream/deepstream-9.1/sources/deepstream_python_apps/bindings/dist/pyds-1.2.3-cp312-cp312-linux_x86_64.whl#sha256=cab5519ad9c5875cc4ce1c33ace055a13e60279061bd895c59b9828321107ac6
 PyGObject==3.48.2
 PyYAML==6.0.1
